@@ -105,6 +105,26 @@ Projects are scored on a 100 point scale:
 - match_debug
 - match_date
 
+
+# Freelancermap Projekt-Matcher
+
+## Setup
+
+1. Install requirements:
+```bash
+pip install -r requirements.txt
+```
+
+2. Ensure `freelancermap.db` is in the same directory
+
+3. Run the Flask application:
+```bash
+python webserver.py
+```
+
+The application will be available at `http://localhost:5000`
+
+
 ## Requirements
 
 - Python 3.8+
