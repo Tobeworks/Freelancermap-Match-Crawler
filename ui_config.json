@@ -1,6 +1,7 @@
 {
   "max_pages": 5,
   "min_score": 0,
+  "matching_enabled": true,
   "skills": "Kotlin,\nJava,\nPython,\nC#,\nJavaScript,\nTypeScript,\nSQL,\nReact,\nNext.js,\nn8n,\nOdoo,\nHTML5,\nWordPress,\nTYPO3",
   "preferred_keywords": "",
   "excluded_keywords": "",
