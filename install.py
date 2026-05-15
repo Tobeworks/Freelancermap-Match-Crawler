@@ -27,13 +27,13 @@ def main():
     pip = [sys.executable, "-m", "pip"]
 
     run(
-        pip + ["install", "--upgrade", "pip"],
+        pip + ["install", "--upgrade", "pip", "--break-system-packages"],
         "pip aktualisieren",
     )
 
     req = os.path.join(os.path.dirname(__file__), "requirements.txt")
     run(
-        pip + ["install", "-r", req],
+        pip + ["install", "-r", req, "--break-system-packages"],
         "Python-Pakete installieren (requirements.txt)",
     )
 
@@ -43,7 +43,7 @@ def main():
     )
 
     run(
-        [sys.executable, "-m", "playwright", "install-deps", "chromium"],
+        [sys.executable, "-m", "playwright", "install-deps", "chromium", "--break-system-packages"],
         "Playwright System-Abhängigkeiten installieren (nur Linux)",
     ) if sys.platform.startswith("linux") else None
 
