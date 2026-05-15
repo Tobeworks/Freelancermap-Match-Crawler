@@ -194,7 +194,6 @@ class FreelancermapScraper:
         captured_json = []
 
         def _on_response(response):
-            # Intercept JSON responses that might contain project data
             if response.status != 200:
                 return
             ct = response.headers.get('content-type', '')
@@ -205,8 +204,10 @@ class FreelancermapScraper:
                 if isinstance(data, list) and data and isinstance(data[0], dict) and 'title' in data[0]:
                     captured_json.extend(data)
                 elif isinstance(data, dict):
-                    for key in ('projects', 'hits', 'items', 'results', 'data'):
-                        if key in data and isinstance(data[key], list):
+                    # Current API format
+                    for key in ('initialTopResults', 'initialResults',
+                                'projects', 'hits', 'items', 'results', 'data'):
+                        if key in data and isinstance(data[key], list) and data[key]:
                             captured_json.extend(data[key])
                             break
             except Exception:
@@ -274,6 +275,20 @@ class FreelancermapScraper:
             return []
 
         projects = []
+        # Current API format: initialTopResults + initialResults
+        for p in data.get('initialTopResults', []):
+            parsed = self._parse_json_project(p, is_top=True)
+            if parsed:
+                projects.append(parsed)
+        for p in data.get('initialResults', []):
+            parsed = self._parse_json_project(p, is_top=False)
+            if parsed:
+                projects.append(parsed)
+
+        if projects:
+            return projects
+
+        # Legacy fallback keys
         for key in ('projects', 'top_projects', 'hits', 'items'):
             items = data.get(key, [])
             if items:
@@ -281,35 +296,50 @@ class FreelancermapScraper:
                     parsed = self._parse_json_project(p, is_top=(key == 'top_projects'))
                     if parsed:
                         projects.append(parsed)
-                break
         return projects
 
     def _parse_json_project(self, p, is_top=False):
         """Convert a raw JSON project object into the internal dict format."""
         try:
             title = p.get('title', 'N/A')
-            slug = p.get('slug', '')
-            plink = p.get('plink', p.get('url', ''))
 
-            if plink:
-                link = f"{self.base_url}{plink}" if plink.startswith('/') else plink
-            elif slug:
-                link = f"{self.base_url}/projekte/{slug}"
+            # Link: current API stores path in links.project (/projekt/slug)
+            # plink and url are often null – only use as last resort
+            links_obj = p.get('links', {})
+            project_path = links_obj.get('project', '')
+            if project_path:
+                link = f"{self.base_url}{project_path}"
             else:
-                link = 'N/A'
+                slug = p.get('slug', '')
+                plink = p.get('plink') or p.get('url') or ''
+                if plink:
+                    link = f"{self.base_url}{plink}" if plink.startswith('/') else plink
+                elif slug:
+                    link = f"{self.base_url}/projekt/{slug}"
+                else:
+                    link = 'N/A'
 
-            poster = p.get('poster', {})
-            company = p.get('company') or poster.get('company', 'N/A') or 'N/A'
+            company = p.get('company') or p.get('poster', {}).get('company') or 'N/A'
 
+            # Description: strip Quill-editor HTML
             raw_desc = p.get('description', '')
             description = BeautifulSoup(raw_desc, 'html.parser').get_text(strip=True) if raw_desc else 'N/A'
 
+            # Keywords: try several sources in order of preference
             matching = p.get('matching', {})
-            kw_list = matching.get('keywordsLocalized', [])
-            # Also try top-level fields
-            if not kw_list:
-                kw_list = p.get('keywords', [])
-            keywords = ', '.join(kw_list) if kw_list else 'N/A'
+            kw_list = (
+                matching.get('keywordsLocalized')
+                or matching.get('textLocalized')
+                or matching.get('titleLocalized')
+                or p.get('skills')
+                or p.get('keywords')
+                or []
+            )
+            def _kw_label(k):
+                if isinstance(k, dict):
+                    return k.get('de') or k.get('nameDe') or k.get('name') or str(k)
+                return str(k)
+            keywords = ', '.join(_kw_label(k) for k in kw_list) if kw_list else 'N/A'
 
             created_raw = p.get('created', '')
             try:
@@ -317,6 +347,9 @@ class FreelancermapScraper:
                 created_date = dt.strftime('%Y-%m-%d %H:%M:%S')
             except Exception:
                 created_date = created_raw or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Top project: topProject field is non-null for promoted listings
+            is_top_project = (p.get('topProject') is not None) or is_top
 
             is_endcustomer = bool(p.get('endcustomer'))
 
@@ -327,7 +360,7 @@ class FreelancermapScraper:
                 'beschreibung': description,
                 'keywords': keywords,
                 'eintragungsdatum': created_date,
-                'ist_top_projekt': is_top,
+                'ist_top_projekt': is_top_project,
                 'ist_endkundenprojekt': is_endcustomer,
             }
         except Exception as e:
