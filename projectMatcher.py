@@ -154,8 +154,22 @@ class FreelancermapScraper:
             return False
 
     def get_page_url(self, page_number):
-        from urllib.parse import quote
         cfg = self.search_config
+
+        direct_url = cfg.get('direct_url', '').strip()
+        if direct_url:
+            # Replace existing pagenr= or append it
+            if re.search(r'[?&]pagenr=\d+', direct_url):
+                url = re.sub(r'(pagenr=)\d+', rf'\g<1>{page_number}', direct_url)
+            else:
+                sep = '&' if '?' in direct_url else '?'
+                url = f"{direct_url}{sep}pagenr={page_number}"
+            # Ensure absolute URL
+            if url.startswith('/'):
+                url = f"{self.base_url}{url}"
+            return url
+
+        from urllib.parse import quote
         parts = []
 
         query = cfg.get('search_query', '').strip()
