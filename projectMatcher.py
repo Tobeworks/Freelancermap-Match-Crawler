@@ -75,12 +75,13 @@ class FreelancermapDatabase:
 
 
 class FreelancermapScraper:
-    def __init__(self, db, username, password, max_pages=2):
+    def __init__(self, db, username, password, max_pages=2, search_config=None):
         self.db = db
         self.base_url = "https://www.freelancermap.de"
         self.username = username
         self.password = password
         self.max_pages = max_pages
+        self.search_config = search_config or {}
         self._pw = None
         self._browser = None
         self._ctx = None
@@ -153,16 +154,37 @@ class FreelancermapScraper:
             return False
 
     def get_page_url(self, page_number):
-        params = [
-            "projectContractTypes[0]=contracting",
-            "remoteInPercent[0]=100",
-            "countries[]=1",
-            "countries[]=2",
-            "countries[]=3",
-            "sort=1",
-            f"pagenr={page_number}",
-        ]
-        return f"{self.base_url}/projekte?{'&'.join(params)}"
+        from urllib.parse import quote
+        cfg = self.search_config
+        parts = []
+
+        query = cfg.get('search_query', '').strip()
+        if query:
+            parts.append(f"query={quote(query)}")
+
+        categories = cfg.get('categories', [])
+        if categories:
+            parts.append(f"categories={','.join(str(c) for c in categories)}")
+
+        contract_types = cfg.get('contract_types', ['contracting'])
+        for i, ct in enumerate(contract_types):
+            parts.append(f"projectContractTypes[{i}]={ct}")
+
+        remote = cfg.get('remote_percent', None)
+        if remote is not None:
+            parts.append(f"remoteInPercent[0]={remote}")
+
+        countries = cfg.get('countries', [1, 2, 3])
+        for c in countries:
+            parts.append(f"countries[]={c}")
+
+        if cfg.get('endcustomer_only', False):
+            parts.append("endcustomer=1")
+
+        parts.append(f"sort={cfg.get('sort', 1)}")
+        parts.append(f"pagenr={page_number}")
+
+        return f"{self.base_url}/projekte?{'&'.join(parts)}"
 
     def get_page(self, page_number):
         url = self.get_page_url(page_number)
