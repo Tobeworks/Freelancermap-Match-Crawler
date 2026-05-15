@@ -154,6 +154,8 @@ class FreelancermapScraper:
 
     def get_page_url(self, page_number):
         params = [
+            "projectContractTypes[0]=contracting",
+            "remoteInPercent[0]=100",
             "countries[]=1",
             "countries[]=2",
             "countries[]=3",
