@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
     'password': '',
     'max_pages': 10,
     'min_score': 35,
+    'matching_enabled': True,
     'skills': 'Python, JavaScript, React, Vue, MySQL, HTML, CSS, PHP, GCP, AWS, Cloud, AI, Frontend, Vue.js, JS',
     'preferred_keywords': 'Webentwicklung, Backend, Frontend, Fullstack, API, Wordpress, GCP, AWS, Cloud, AI, OpenAI',
     'excluded_keywords': 'SAP, Drupal',
@@ -292,18 +293,26 @@ class ScraperWorker(QThread):
                     time.sleep(random.uniform(2, 4))
 
             if not self._stop:
-                self.log.emit(f'{scraped} Projekte gespeichert. Starte Matching …', 'success')
-                matcher = projectMatcher.ProjectMatcher(db)
-                matcher.find_matches(profile, min_score=min_score)
-                try:
-                    stats = matcher.get_statistics()
-                    total = stats.get('total_matches', 0)
-                    avg   = stats.get('avg_score') or 0
-                    self.log.emit(f'Fertig!  Matches: {total}  |  Ø Score: {avg:.1f}', 'success')
-                    self.finished.emit(total)
+                matching_enabled = self.config.get('matching_enabled', True)
+                if matching_enabled:
+                    self.log.emit(f'{scraped} Projekte gespeichert. Starte Matching …', 'success')
+                    matcher = projectMatcher.ProjectMatcher(db)
+                    matcher.find_matches(profile, min_score=min_score)
+                    try:
+                        stats = matcher.get_statistics()
+                        total = stats.get('total_matches', 0)
+                        avg   = stats.get('avg_score') or 0
+                        self.log.emit(f'Fertig!  Matches: {total}  |  Ø Score: {avg:.1f}', 'success')
+                        self.finished.emit(total)
+                        return
+                    except Exception:
+                        pass
+                else:
+                    self.log.emit(
+                        f'{scraped} Projekte gespeichert. Matching deaktiviert – alle Projekte extrahiert.',
+                        'success')
+                    self.finished.emit(scraped)
                     return
-                except Exception:
-                    pass
             self.finished.emit(0)
 
         except Exception as exc:
@@ -372,8 +381,14 @@ class MainWindow(QMainWindow):
         self._min_score.setRange(0, 100)
         self._min_score.setValue(int(self.config['min_score']))
         self._min_score.setFixedWidth(80)
+        self._matching_enabled = QCheckBox('Profil-Matching aktivieren')
+        self._matching_enabled.setChecked(self.config.get('matching_enabled', True))
+        self._matching_enabled.setToolTip(
+            'Wenn deaktiviert, werden alle Projekte ohne Matching gespeichert '
+            '(nützlich für reine Extraktion aller Ergebnisse).')
         fl2.addRow('Max. Seiten:', self._max_pages)
         fl2.addRow('Min. Score (0–100):', self._min_score)
+        fl2.addRow('Matching:', self._matching_enabled)
         root.addWidget(sc)
 
         # Profile
@@ -518,6 +533,7 @@ class MainWindow(QMainWindow):
             'password':           self._password.text(),
             'max_pages':          self._max_pages.value(),
             'min_score':          self._min_score.value(),
+            'matching_enabled':   self._matching_enabled.isChecked(),
             'skills':             self._skills.text(),
             'preferred_keywords': self._preferred.text(),
             'excluded_keywords':  self._excluded.text(),
