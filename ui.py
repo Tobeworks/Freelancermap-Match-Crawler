@@ -9,11 +9,13 @@ import os
 import sys
 import json
 import csv
+import re
 import threading
 import queue
 import sqlite3
 import webbrowser
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSortFilterProxyModel
 from PyQt6.QtGui import QFont, QColor, QStandardItemModel, QStandardItem
@@ -45,6 +47,7 @@ DEFAULT_CONFIG = {
     'contract_types': ['contracting'],
     'endcustomer_only': False,
     'sort': 1,
+    'direct_url': '',
 }
 
 _CATEGORIES = [
@@ -86,6 +89,69 @@ _SORT_OPTIONS = [
     ('Neueste zuerst',  1),
     ('Relevanz',        2),
 ]
+
+
+def parse_freelancermap_url(url):
+    """Parse a freelancermap search URL into filter parameter dict.
+
+    Returns a dict with recognized keys (categories, contract_types,
+    remote_percent, countries, sort) and 'matching_skills_count' for
+    information purposes.  Unknown/unparseable values are silently ignored.
+    """
+    try:
+        parsed = urlparse(url.strip())
+        params = parse_qs(parsed.query, keep_blank_values=False)
+    except Exception:
+        return {}
+
+    result = {}
+
+    cats = []
+    for key, vals in params.items():
+        if re.match(r'categories\[', key):
+            for v in vals:
+                try:
+                    cats.append(int(v))
+                except ValueError:
+                    pass
+    if cats:
+        result['categories'] = cats
+
+    cts = []
+    for key, vals in params.items():
+        if re.match(r'projectContractTypes\[', key):
+            cts.extend(vals)
+    if cts:
+        result['contract_types'] = cts
+
+    for key, vals in params.items():
+        if re.match(r'remoteInPercent\[', key):
+            try:
+                result['remote_percent'] = int(vals[0])
+            except (ValueError, IndexError):
+                pass
+
+    countries = []
+    for key, vals in params.items():
+        if re.match(r'countries', key):
+            for v in vals:
+                try:
+                    countries.append(int(v))
+                except ValueError:
+                    pass
+    if countries:
+        result['countries'] = countries
+
+    if 'sort' in params:
+        try:
+            result['sort'] = int(params['sort'][0])
+        except (ValueError, IndexError):
+            pass
+
+    result['matching_skills_count'] = sum(
+        1 for k in params if re.match(r'matchingSkills\[', k)
+    )
+    return result
 
 
 def load_config():
@@ -165,6 +231,7 @@ class ScraperWorker(QThread):
             max_pages = max(1, int(self.config['max_pages']))
             min_score = int(self.config['min_score'])
 
+            direct_url = self.config.get('direct_url', '').strip()
             search_config = {
                 'search_query':   self.config.get('search_query', ''),
                 'categories':     self.config.get('categories', [1]),
@@ -173,12 +240,17 @@ class ScraperWorker(QThread):
                 'contract_types': self.config.get('contract_types', ['contracting']),
                 'endcustomer_only': self.config.get('endcustomer_only', False),
                 'sort':           self.config.get('sort', 1),
+                'direct_url':     direct_url,
             }
 
             self.log.emit(f'Starte Scraping  |  Seiten: {max_pages}  |  Min-Score: {min_score}', 'info')
             self.log.emit(f'Skills: {", ".join(profile["skills"][:8])} …', 'info')
-            query_hint = search_config['search_query'] or '(alle)'
-            self.log.emit(f'Suchbegriff: {query_hint}  |  Remote: {search_config["remote_percent"]}%', 'info')
+            if direct_url:
+                self.log.emit(f'Modus: URL-Import  |  pagenr wird pro Seite angepasst', 'info')
+                self.log.emit(f'URL: {direct_url[:80]}{"…" if len(direct_url) > 80 else ""}', 'info')
+            else:
+                query_hint = search_config['search_query'] or '(alle)'
+                self.log.emit(f'Suchbegriff: {query_hint}  |  Remote: {search_config["remote_percent"]}%', 'info')
 
             db = projectMatcher.FreelancermapDatabase()
             scraper = projectMatcher.FreelancermapScraper(
@@ -321,6 +393,29 @@ class MainWindow(QMainWindow):
         sf_vl = QVBoxLayout(sf)
         sf_vl.setSpacing(8)
 
+        # --- URL Import ---
+        url_row = QHBoxLayout()
+        url_row.addWidget(QLabel('Freelancermap-Link:'))
+        self._direct_url = QLineEdit(self.config.get('direct_url', ''))
+        self._direct_url.setPlaceholderText(
+            'Suchlink von freelancermap.de hier einfügen und auf „Importieren" klicken …')
+        url_row.addWidget(self._direct_url)
+        import_btn = QPushButton('Importieren')
+        import_btn.setFixedWidth(110)
+        import_btn.clicked.connect(self._import_url)
+        url_row.addWidget(import_btn)
+        clear_url_btn = QPushButton('Löschen')
+        clear_url_btn.setFixedWidth(80)
+        clear_url_btn.clicked.connect(self._clear_url)
+        url_row.addWidget(clear_url_btn)
+        sf_vl.addLayout(url_row)
+
+        self._url_status = QLabel('')
+        self._url_status.setStyleSheet('color: #4ec9b0; font-style: italic;')
+        if self.config.get('direct_url', ''):
+            self._url_status.setText('URL aktiv – Filter werden beim Scraping von der URL übernommen.')
+        sf_vl.addWidget(self._url_status)
+
         # Search query
         q_row = QHBoxLayout()
         q_row.addWidget(QLabel('Suchbegriff:'))
@@ -433,9 +528,76 @@ class MainWindow(QMainWindow):
             'contract_types':     cts,
             'endcustomer_only':   self._endcustomer_check.isChecked(),
             'sort':               sort_val,
+            'direct_url':         self._direct_url.text().strip(),
         })
         save_config(self.config)
         self.statusBar().showMessage('Einstellungen gespeichert.')
+
+    def _import_url(self):
+        url = self._direct_url.text().strip()
+        if not url:
+            self._url_status.setStyleSheet('color: #f44747; font-style: italic;')
+            self._url_status.setText('Bitte zuerst einen Freelancermap-Link einfügen.')
+            return
+
+        if 'freelancermap.de' not in url:
+            self._url_status.setStyleSheet('color: #f44747; font-style: italic;')
+            self._url_status.setText('Ungültige URL – bitte einen freelancermap.de-Link verwenden.')
+            return
+
+        parsed = parse_freelancermap_url(url)
+        if not parsed:
+            self._url_status.setStyleSheet('color: #f44747; font-style: italic;')
+            self._url_status.setText('URL konnte nicht geparst werden.')
+            return
+
+        # Update category checkboxes
+        if 'categories' in parsed:
+            for cat_id, cb in self._category_checks.items():
+                cb.setChecked(cat_id in parsed['categories'])
+
+        # Update country checkboxes
+        if 'countries' in parsed:
+            for c_id, cb in self._country_checks.items():
+                cb.setChecked(c_id in parsed['countries'])
+
+        # Update contract type checkboxes
+        if 'contract_types' in parsed:
+            for ct_val, cb in self._contract_checks.items():
+                cb.setChecked(ct_val in parsed['contract_types'])
+
+        # Update remote combo
+        if 'remote_percent' in parsed:
+            remote = parsed['remote_percent']
+            if remote in self._remote_values:
+                self._remote_combo.setCurrentIndex(self._remote_values.index(remote))
+
+        # Update sort combo
+        if 'sort' in parsed:
+            sort_val = parsed['sort']
+            if sort_val in self._sort_values:
+                self._sort_combo.setCurrentIndex(self._sort_values.index(sort_val))
+
+        # Build status summary
+        parts = []
+        if parsed.get('matching_skills_count'):
+            parts.append(f"{parsed['matching_skills_count']} Skills")
+        if 'categories' in parsed:
+            parts.append(f"Kategorien: {parsed['categories']}")
+        if 'remote_percent' in parsed:
+            parts.append(f"{parsed['remote_percent']}% Remote")
+        if 'countries' in parsed:
+            parts.append(f"Länder: {parsed['countries']}")
+
+        summary = ' · '.join(parts) if parts else 'Parameter importiert'
+        self._url_status.setStyleSheet('color: #4ec9b0; font-style: italic;')
+        self._url_status.setText(f'URL aktiv – {summary}')
+        self.statusBar().showMessage('URL importiert.')
+
+    def _clear_url(self):
+        self._direct_url.clear()
+        self._url_status.setText('')
+        self.statusBar().showMessage('URL-Filter gelöscht – manuelle Filter aktiv.')
 
     # -------------------------------------------------------- Crawler tab
 
