@@ -126,14 +126,14 @@ class FreelancermapScraper:
             self._ensure_browser()
 
             print("Lade Login-Seite...")
-            self._page.goto(f"{self.base_url}/login", wait_until='domcontentloaded', timeout=20000)
+            self._page.goto(f"{self.base_url}/login", wait_until='networkidle', timeout=30000)
 
             print("Führe Login durch...")
             self._page.fill('input[name="login"]', self.username)
             self._page.fill('input[name="password"]', self.password)
 
             with self._page.expect_navigation(wait_until='domcontentloaded', timeout=15000):
-                self._page.locator('button[type="submit"]:visible, input[type="submit"]:visible').first.click()
+                self._page.press('input[name="password"]', 'Enter')
 
             print(f"Response URL: {self._page.url}")
 
