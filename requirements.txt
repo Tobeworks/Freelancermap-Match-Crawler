@@ -1,6 +1,6 @@
-# tkinter is part of the Python standard library.
-# Linux: sudo apt install python3-tk  (if not present)
-# macOS/Windows: included with the official Python installer
+# Desktop UI (cross-platform)
+PyQt6>=6.6.0
+
 beautifulsoup4==4.13.1
 blinker==1.9.0
 certifi==2025.1.31
