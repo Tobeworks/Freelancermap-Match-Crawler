@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QSpinBox, QPushButton, QTextEdit,
     QTableView, QHeaderView, QProgressBar, QFileDialog,
     QMessageBox, QGroupBox, QCheckBox, QStatusBar, QSplitter,
-    QAbstractItemView,
+    QAbstractItemView, QComboBox,
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +38,54 @@ DEFAULT_CONFIG = {
     'skills': 'Python, JavaScript, React, Vue, MySQL, HTML, CSS, PHP, GCP, AWS, Cloud, AI, Frontend, Vue.js, JS',
     'preferred_keywords': 'Webentwicklung, Backend, Frontend, Fullstack, API, Wordpress, GCP, AWS, Cloud, AI, OpenAI',
     'excluded_keywords': 'SAP, Drupal',
+    'search_query': '',
+    'categories': [1],
+    'countries': [1, 2, 3],
+    'remote_percent': 100,
+    'contract_types': ['contracting'],
+    'endcustomer_only': False,
+    'sort': 1,
 }
+
+_CATEGORIES = [
+    (1,  'Web- & Softwareentwicklung'),
+    (2,  'Schreiben & Übersetzen'),
+    (3,  'Grafikdesign & Kreativdienste'),
+    (4,  'Digitales Marketing'),
+    (6,  'Ingenieurwesen'),
+    (7,  'Finanz- & Rechnungswesen'),
+    (8,  'Management & Beratung'),
+    (9,  'Forschung & Analyse'),
+    (11, 'IT-Dienstleistungen'),
+]
+
+_COUNTRIES = [
+    (1, 'Deutschland'),
+    (2, 'Österreich'),
+    (3, 'Schweiz'),
+]
+
+_CONTRACT_TYPES = [
+    ('contracting',        'Freiberuflich'),
+    ('permanent_position', 'Festanstellung'),
+    ('employee_leasing',   'Arbeitnehmerüberlassung'),
+]
+
+_REMOTE_OPTIONS = [
+    ('Alle (kein Filter)', None),
+    ('100% Remote',        100),
+    ('≥ 90% Remote',        90),
+    ('≥ 80% Remote',        80),
+    ('≥ 60% Remote',        60),
+    ('≥ 40% Remote',        40),
+    ('≥ 20% Remote',        20),
+    ('Vor Ort (0%)',          0),
+]
+
+_SORT_OPTIONS = [
+    ('Neueste zuerst',  1),
+    ('Relevanz',        2),
+]
 
 
 def load_config():
@@ -118,8 +165,20 @@ class ScraperWorker(QThread):
             max_pages = max(1, int(self.config['max_pages']))
             min_score = int(self.config['min_score'])
 
+            search_config = {
+                'search_query':   self.config.get('search_query', ''),
+                'categories':     self.config.get('categories', [1]),
+                'countries':      self.config.get('countries', [1, 2, 3]),
+                'remote_percent': self.config.get('remote_percent', 100),
+                'contract_types': self.config.get('contract_types', ['contracting']),
+                'endcustomer_only': self.config.get('endcustomer_only', False),
+                'sort':           self.config.get('sort', 1),
+            }
+
             self.log.emit(f'Starte Scraping  |  Seiten: {max_pages}  |  Min-Score: {min_score}', 'info')
             self.log.emit(f'Skills: {", ".join(profile["skills"][:8])} …', 'info')
+            query_hint = search_config['search_query'] or '(alle)'
+            self.log.emit(f'Suchbegriff: {query_hint}  |  Remote: {search_config["remote_percent"]}%', 'info')
 
             db = projectMatcher.FreelancermapDatabase()
             scraper = projectMatcher.FreelancermapScraper(
@@ -127,6 +186,7 @@ class ScraperWorker(QThread):
                 username=self.config['username'],
                 password=self.config['password'],
                 max_pages=max_pages,
+                search_config=search_config,
             )
 
             if not scraper.login():
@@ -245,7 +305,7 @@ class MainWindow(QMainWindow):
         root.addWidget(sc)
 
         # Profile
-        pr = QGroupBox('Profil')
+        pr = QGroupBox('Profil (Matching)')
         fl3 = QFormLayout(pr)
         fl3.setSpacing(8)
         self._skills    = QLineEdit(self.config['skills'])
@@ -255,6 +315,92 @@ class MainWindow(QMainWindow):
         fl3.addRow('Bevorzugte Keywords:', self._preferred)
         fl3.addRow('Ausgeschlossene Keywords:', self._excluded)
         root.addWidget(pr)
+
+        # Search Filters
+        sf = QGroupBox('Suchfilter (Playwright)')
+        sf_vl = QVBoxLayout(sf)
+        sf_vl.setSpacing(8)
+
+        # Search query
+        q_row = QHBoxLayout()
+        q_row.addWidget(QLabel('Suchbegriff:'))
+        self._search_query = QLineEdit(self.config.get('search_query', ''))
+        self._search_query.setPlaceholderText('z.B. Python Developer  (leer = alle Projekte)')
+        q_row.addWidget(self._search_query)
+        sf_vl.addLayout(q_row)
+
+        # Categories
+        sf_vl.addWidget(QLabel('Kategorien:'))
+        cat_grid = QGridLayout()
+        cat_grid.setSpacing(4)
+        self._category_checks = {}
+        selected_cats = self.config.get('categories', [1])
+        for idx, (cat_id, cat_name) in enumerate(_CATEGORIES):
+            cb = QCheckBox(cat_name)
+            cb.setChecked(cat_id in selected_cats)
+            self._category_checks[cat_id] = cb
+            cat_grid.addWidget(cb, idx // 3, idx % 3)
+        sf_vl.addLayout(cat_grid)
+
+        # Countries
+        sf_vl.addWidget(QLabel('Länder:'))
+        c_row = QHBoxLayout()
+        self._country_checks = {}
+        selected_countries = self.config.get('countries', [1, 2, 3])
+        for c_id, c_name in _COUNTRIES:
+            cb = QCheckBox(c_name)
+            cb.setChecked(c_id in selected_countries)
+            self._country_checks[c_id] = cb
+            c_row.addWidget(cb)
+        c_row.addStretch()
+        sf_vl.addLayout(c_row)
+
+        # Contract types
+        sf_vl.addWidget(QLabel('Vertragstypen:'))
+        ct_row = QHBoxLayout()
+        self._contract_checks = {}
+        selected_cts = self.config.get('contract_types', ['contracting'])
+        for ct_val, ct_name in _CONTRACT_TYPES:
+            cb = QCheckBox(ct_name)
+            cb.setChecked(ct_val in selected_cts)
+            self._contract_checks[ct_val] = cb
+            ct_row.addWidget(cb)
+        ct_row.addStretch()
+        sf_vl.addLayout(ct_row)
+
+        # Remote + Endcustomer + Sort
+        misc_row = QHBoxLayout()
+        misc_row.addWidget(QLabel('Remote:'))
+        self._remote_combo = QComboBox()
+        self._remote_values = [v for _, v in _REMOTE_OPTIONS]
+        current_remote = self.config.get('remote_percent', 100)
+        for label, _ in _REMOTE_OPTIONS:
+            self._remote_combo.addItem(label)
+        if current_remote in self._remote_values:
+            self._remote_combo.setCurrentIndex(self._remote_values.index(current_remote))
+        self._remote_combo.setFixedWidth(160)
+        misc_row.addWidget(self._remote_combo)
+
+        misc_row.addSpacing(20)
+        misc_row.addWidget(QLabel('Sortierung:'))
+        self._sort_combo = QComboBox()
+        self._sort_values = [v for _, v in _SORT_OPTIONS]
+        current_sort = self.config.get('sort', 1)
+        for label, _ in _SORT_OPTIONS:
+            self._sort_combo.addItem(label)
+        if current_sort in self._sort_values:
+            self._sort_combo.setCurrentIndex(self._sort_values.index(current_sort))
+        self._sort_combo.setFixedWidth(160)
+        misc_row.addWidget(self._sort_combo)
+
+        misc_row.addSpacing(20)
+        self._endcustomer_check = QCheckBox('Nur Endkunden-Projekte')
+        self._endcustomer_check.setChecked(self.config.get('endcustomer_only', False))
+        misc_row.addWidget(self._endcustomer_check)
+        misc_row.addStretch()
+        sf_vl.addLayout(misc_row)
+
+        root.addWidget(sf)
 
         root.addStretch()
         btn = QPushButton('Einstellungen speichern')
@@ -266,6 +412,12 @@ class MainWindow(QMainWindow):
         return w
 
     def _save_config(self):
+        cats     = [cid for cid, cb in self._category_checks.items() if cb.isChecked()]
+        countries = [cid for cid, cb in self._country_checks.items() if cb.isChecked()]
+        cts      = [val for val, cb in self._contract_checks.items() if cb.isChecked()]
+        remote   = self._remote_values[self._remote_combo.currentIndex()]
+        sort_val = self._sort_values[self._sort_combo.currentIndex()]
+
         self.config.update({
             'username':           self._username.text(),
             'password':           self._password.text(),
@@ -274,6 +426,13 @@ class MainWindow(QMainWindow):
             'skills':             self._skills.text(),
             'preferred_keywords': self._preferred.text(),
             'excluded_keywords':  self._excluded.text(),
+            'search_query':       self._search_query.text().strip(),
+            'categories':         cats,
+            'countries':          countries,
+            'remote_percent':     remote,
+            'contract_types':     cts,
+            'endcustomer_only':   self._endcustomer_check.isChecked(),
+            'sort':               sort_val,
         })
         save_config(self.config)
         self.statusBar().showMessage('Einstellungen gespeichert.')
