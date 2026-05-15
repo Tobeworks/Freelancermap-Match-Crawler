@@ -1,0 +1,7 @@
+{
+  "max_pages": 10,
+  "min_score": 35,
+  "skills": "Python, JavaScript, React, Vue, MySQL, HTML, CSS, PHP, GCP, AWS, Cloud, AI, Frontend, Vue.js, JS",
+  "preferred_keywords": "Webentwicklung, Backend, Frontend, Fullstack, API, Wordpress, GCP, AWS, Cloud, AI, OpenAI",
+  "excluded_keywords": "SAP, Drupal"
+}
