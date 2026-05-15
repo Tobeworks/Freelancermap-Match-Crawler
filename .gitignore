@@ -28,7 +28,7 @@ MANIFEST
 bin
 .DS_Store
 *.csv
-*.html
+# *.html
 *.db
 
 # PyInstaller
