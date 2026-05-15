@@ -485,6 +485,17 @@ class ProjectMatcher:
             WHERE created_date >= date('now', '-30 days')
         """, self.db.conn)
 
+        # Delete stale match entries for all projects about to be re-evaluated
+        # so that profile changes (e.g. updated exclusion criteria) take effect
+        # immediately instead of leaving outdated match_debug rows in the DB.
+        if not projects.empty:
+            project_ids = projects['id'].tolist()
+            placeholders = ','.join('?' * len(project_ids))
+            self.db.conn.execute(
+                f"DELETE FROM matches WHERE project_id IN ({placeholders})",
+                project_ids,
+            )
+
         matches = []
         for _, row in projects.iterrows():
             score, debug = self.calculate_match_score(row, profile)
