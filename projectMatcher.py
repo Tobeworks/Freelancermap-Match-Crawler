@@ -133,7 +133,7 @@ class FreelancermapScraper:
             self._page.fill('input[name="password"]', self.password)
 
             with self._page.expect_navigation(wait_until='domcontentloaded', timeout=15000):
-                self._page.click('button[type="submit"], input[type="submit"]')
+                self._page.locator('button[type="submit"]:visible, input[type="submit"]:visible').first.click()
 
             print(f"Response URL: {self._page.url}")
 
