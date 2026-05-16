@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Freelancermap Matches{% endblock %}</title>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary:   { DEFAULT: '#21cda4', dark: '#1ab08a' },
+                        accent:    { DEFAULT: '#3860be', dark: '#2d52a8' },
+                    },
+                    fontFamily: {
+                        sans: ['Mona Sans', 'Inter', 'system-ui', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'fm-sm': '4px',
+                        'fm-md': '7px',
+                        'fm-lg': '16px',
+                        'fm-xl': '24px',
+                    },
+                    boxShadow: {
+                        'fm': 'rgb(199, 197, 199) 0px 0px 12px 2px',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+    </style>
+</head>
+<body class="min-h-full" style="background:#c2d3ce;">
+
+    <nav class="bg-white border-b border-gray-200" style="box-shadow: rgb(199,197,199) 0px 0px 12px 2px;">
+        <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+            <span class="text-lg font-bold" style="color:#21cda4;">freelancermap <span class="text-gray-400 font-normal text-sm">Matches</span> <span class="text-xs font-normal text-gray-300">v{{ version }}</span></span>
+            <div class="flex gap-2">
+                <a href="/"
+                   class="px-5 py-2 text-sm font-semibold rounded-full transition-colors"
+                   style="{% if request.path == '/' %}background:#21cda4;color:#fff;{% else %}background:transparent;color:#555;{% endif %}">
+                    Matches
+                </a>
+                <a href="/statistics"
+                   class="px-5 py-2 text-sm font-semibold rounded-full transition-colors"
+                   style="{% if request.path == '/statistics' %}background:#21cda4;color:#fff;{% else %}background:transparent;color:#555;{% endif %}">
+                    Statistiken
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

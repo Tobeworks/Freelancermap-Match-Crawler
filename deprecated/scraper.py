@@ -342,6 +342,6 @@ if __name__ == "__main__":
     scraper = FreelancermapScraper(
         username=username,
         password=password,
-        max_pages=3
+        max_pages=30
     )
     projects_df = scraper.scrape()

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ project['title'] }} – Freelancermap{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="/" class="text-sm font-medium text-gray-600 hover:underline">&larr; Zurück</a>
+</div>
+
+<div class="bg-white rounded-3xl shadow-sm p-7">
+    <div class="flex items-start justify-between gap-5 mb-5">
+        <div class="flex-1 min-w-0">
+            <p class="text-sm text-gray-500 mb-1">{{ project['company'] }} &mdash; {{ project['created_date'][:10] }}</p>
+            <h1 class="text-2xl font-bold text-gray-900 leading-snug mb-3">{{ project['title'] }}</h1>
+            <div class="flex flex-wrap gap-2">
+                {% if project['is_top_project'] %}
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold text-white" style="background:#21cda4;">Top-Projekt</span>
+                {% endif %}
+                {% if project['is_endcustomer'] %}
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold border" style="color:#7c3aed;border-color:#7c3aed;">Endkundenprojekt</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex-shrink-0 flex flex-col items-center justify-center w-20 h-20 rounded-2xl font-bold"
+            style="{% if project['match_score'] >= 60 %}background:#21cda4;color:white;{% elif project['match_score'] >= 40 %}background:#fde68a;color:#92400e;{% else %}background:#f3f4f6;color:#9ca3af;{% endif %}">
+            <span class="text-2xl leading-none">{{ project['match_score']|round|int }}</span>
+            <span class="text-xs font-normal opacity-75">Score</span>
+        </div>
+    </div>
+
+    <a href="{{ project['link'] }}" target="_blank"
+       class="inline-flex items-center gap-1.5 px-6 py-2.5 text-sm font-semibold text-white rounded-full hover:opacity-90 transition-opacity mb-6"
+       style="background:#21cda4;">
+        Projekt öffnen ↗
+    </a>
+
+    <div class="border-t border-gray-100 pt-5">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Beschreibung</h2>
+        <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{{ project['description'] }}</p>
+    </div>
+
+    {% if project['match_debug'] %}
+    <div class="border-t border-gray-100 mt-6 pt-5">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Match-Details</h2>
+        <pre class="text-xs text-gray-600 bg-gray-50 rounded-2xl p-4 whitespace-pre-wrap">{{ project['match_debug'] }}</pre>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

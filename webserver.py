@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from flask import Flask, render_template, request, g
+from version import __version__
 from werkzeug.middleware.proxy_fix import ProxyFix
 import sys
 
@@ -13,6 +14,10 @@ os.makedirs(TEMPLATE_DIR, exist_ok=True)
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app)
+
+@app.context_processor
+def inject_version():
+    return {'version': __version__}
 
 # Database path (can be adjusted)
 DATABASE = os.path.join(BASE_DIR, 'freelancermap.db')
@@ -105,12 +110,12 @@ def statistics():
     
     # Overall statistics
     cur.execute("""
-        SELECT 
-            AVG(match_score) as avg_score,
+        SELECT
+            AVG(m.match_score) as avg_score,
             COUNT(*) as total_matches,
-            MAX(match_date) as latest_match,
-            MIN(created_date) as oldest_project,
-            COUNT(DISTINCT company) as unique_companies
+            MAX(m.match_date) as latest_match,
+            MIN(p.created_date) as oldest_project,
+            COUNT(DISTINCT p.company) as unique_companies
         FROM matches m
         JOIN projects p ON m.project_id = p.id
         WHERE m.match_date >= date('now', '-7 days')
@@ -141,14 +146,14 @@ def statistics():
     
     # Top companies
     cur.execute("""
-        SELECT 
-            company, 
-            COUNT(*) as project_count, 
-            AVG(match_score) as avg_match_score
+        SELECT
+            p.company,
+            COUNT(*) as project_count,
+            AVG(m.match_score) as avg_match_score
         FROM matches m
         JOIN projects p ON m.project_id = p.id
-        WHERE company != 'N/A'
-        GROUP BY company
+        WHERE p.company != 'N/A'
+        GROUP BY p.company
         ORDER BY project_count DESC
         LIMIT 10
     """)
@@ -369,7 +374,7 @@ def create_templates():
 
 if __name__ == '__main__':
 
-    create_templates()
+    #create_templates()
 
     # Print database location for debugging
     print(f"Database location: {DATABASE}")
