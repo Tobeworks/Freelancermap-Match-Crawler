@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/opt/homebrew/opt/python@3.14/bin/pip3.14 install *)",
+      "Bash(/opt/homebrew/opt/python@3.14/bin/python3.14 -m playwright install chromium)",
+      "Bash(pip install *)",
+      "Bash(python3 -m playwright install chromium)",
+      "Bash(git -C /Users/tobe/Sites/python/freelancermap status)",
+      "Bash(git -C /Users/tobe/Sites/python/freelancermap checkout -b v2.0.0)"
+    ]
+  }
+}

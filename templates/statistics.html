@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Statistiken – Freelancermap{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold text-gray-900 mb-6">Statistiken</h1>
+
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-3xl shadow-sm p-5">
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Matches (7 Tage)</p>
+        <p class="text-3xl font-bold" style="color:#21cda4;">{{ stats['total_matches'] }}</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm p-5">
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Ø Score</p>
+        <p class="text-3xl font-bold" style="color:#21cda4;">{{ (stats['avg_score'] or 0)|round(1) }}</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm p-5">
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Unternehmen</p>
+        <p class="text-3xl font-bold" style="color:#21cda4;">{{ stats['unique_companies'] }}</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm p-5">
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Neuestes Match</p>
+        <p class="text-lg font-semibold text-gray-800">{{ (stats['latest_match'] or '–')[:10] }}</p>
+    </div>
+    <div class="bg-white rounded-3xl shadow-sm p-5">
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Ältestes Projekt</p>
+        <p class="text-lg font-semibold text-gray-800">{{ (stats['oldest_project'] or '–')[:10] }}</p>
+    </div>
+</div>
+
+<div class="grid md:grid-cols-2 gap-4">
+    <div class="bg-white rounded-3xl shadow-sm p-6">
+        <h2 class="text-base font-bold text-gray-900 mb-4">Score-Verteilung</h2>
+        {% set total = score_distribution | sum(attribute='count') %}
+        <div class="space-y-3">
+            {% for dist in score_distribution %}
+            {% set pct = ((dist['count'] / total * 100) if total > 0 else 0)|round|int %}
+            <div>
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-gray-500">{{ dist['score_range'] }}</span>
+                    <span class="font-semibold text-gray-900">{{ dist['count'] }}</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                    <div class="h-2 rounded-full" style="width:{{ pct }}%; background:#21cda4;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm p-6">
+        <h2 class="text-base font-bold text-gray-900 mb-4">Top 10 Unternehmen</h2>
+        <div>
+            {% for company in top_companies %}
+            <div class="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                <span class="text-sm text-gray-700 truncate flex-1 pr-4">{{ company['company'] }}</span>
+                <div class="flex items-center gap-3 flex-shrink-0 text-sm">
+                    <span class="text-gray-400">{{ company['project_count'] }}×</span>
+                    <span class="font-bold" style="color:#21cda4;">Ø {{ company['avg_match_score']|round(1) }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

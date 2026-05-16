@@ -2,7 +2,6 @@ import sqlite3
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
 import time
 import random
 import math
@@ -17,18 +16,18 @@ FREELANCERMAP_USERNAME = os.getenv('FREELANCERMAP_USERNAME')
 FREELANCERMAP_PASSWORD = os.getenv('FREELANCERMAP_PASSWORD')
 
 # Scraping Settings
-MAX_PAGES = 100
-MIN_SCORE = 35
+MAX_PAGES = 10
+MIN_SCORE = 40
 
 # Profile Settings
 PROFILE = {
     'skills': [
         'Python', 'JavaScript', 'React', 'Vue', 'MySQL', 
         'HTML', 'CSS', 'PHP', 'GCP', 'AWS', 'Cloud', 
-        'AI', 'Frontend', 'Vue.js', 'JS'
+        'AI', 'Frontend', 'Vue.js', 'JS', 
     ],
     'preferred_keywords': [
-        'Webentwicklung', 'Backend', 'Frontend', 'Fullstack', 
+        'Webentwicklung', 'Backend', 'Webdesign','Frontend', 'Fullstack', 
         'API', 'Wordpress', 'GCP', 'AWS', 'Cloud', 'AI', 'OpenAI'
     ],
     'excluded_keywords': ['SAP', 'Drupal']
@@ -38,7 +37,11 @@ PROFILE = {
 class FreelancermapDatabase:
     def __init__(self, db_path="freelancermap.db"):
         self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
         self.create_tables()
+
+    def close(self):
+        self.conn.close()
         
     def create_tables(self):
         self.conn.execute("""
@@ -115,22 +118,7 @@ class FreelancermapScraper:
     def login(self):
         try:
             print("Starte Login-Prozess...")
-            
-            # Standard-Headers für alle Requests
-            self.headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'de,en-US;q=0.7,en;q=0.3',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Origin': 'https://www.freelancermap.de',
-                'Connection': 'keep-alive',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'DNT': '1'
-            }
-            
+
             # Erst die Login-Seite abrufen
             print("Lade Login-Seite...")
             self.session.get(
@@ -142,7 +130,8 @@ class FreelancermapScraper:
             login_headers = self.headers.copy()
             login_headers.update({
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Referer': 'https://www.freelancermap.de/login'
+                'Referer': 'https://www.freelancermap.de/login',
+                'Origin': 'https://www.freelancermap.de',
             })
             
             login_data = {
@@ -201,146 +190,107 @@ class FreelancermapScraper:
             return False
 
     def get_page_url(self, page_number):
-        """Generiert die URL für eine bestimmte Seite der Projektbörse"""
         params = [
-            "projectContractTypes[0]=contracting",
-            "remoteInPercent[0]=100",
-            "countries[]=1",  # Deutschland
-            "countries[]=2",  # Österreich
-            "countries[]=3",  # Schweiz
-            "sort=1",        # Neueste zuerst
+            "contractTypes[]=contracting",
+            "remoteInPercent[]=100",
+            "countries[]=1",
+            "countries[]=2",
+            "countries[]=3",
+            "sort=1",
             f"pagenr={page_number}"
         ]
-        return f"{self.base_url}/projektboerse.html?{'&'.join(params)}"
+        return f"{self.base_url}/project/search/ajax?{'&'.join(params)}"
 
     def get_page(self, page_number):
-        """Lädt eine einzelne Seite und extrahiert die Projektdaten"""
+        import json as json_lib
         url = self.get_page_url(page_number)
         print(f"\nAbrufen von Seite {page_number}")
         print(f"URL: {url}")
-        
-        try:
-            # Seite abrufen
-            response = self.session.get(url, headers=self.headers)
-            print(f"Status Code: {response.status_code}")
-            
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Prüfe ob Login noch aktiv
-                if "Bitte melden Sie sich an" in response.text:
-                    print("Login-Session abgelaufen, versuche erneuten Login...")
-                    if self.login():
-                        return self.get_page(page_number)  # Seite erneut abrufen
-                    return []
-                
-                # Suche nach Projekten
-                projects = soup.find_all('div', class_='project-container')
-                if not projects:
-                    print("Keine Projekte auf dieser Seite gefunden!")
-                    return []
-                
-                print(f"Gefundene Projekte auf Seite {page_number}: {len(projects)}")
-                
-                # Extrahiere Daten
-                project_data = []
-                for project in projects:
-                    data = self._extract_project_data(project)
-                    if data:
-                        project_data.append(data)
-                        print(f"Extrahiert: {data.get('titel', 'Kein Titel')[:50]}...")
-                
-                return project_data
-            else:
-                print(f"Fehler beim Abrufen der Seite: Status Code {response.status_code}")
-                return []
-                
-        except Exception as e:
-            print(f"Fehler beim Laden der Seite {page_number}: {str(e)}")
-            return []
-            
-    def _extract_project_data(self, project):
-        try:
-            # Titel und Link extrahieren
-            title_elem = project.find('h2', class_='body')
-            if title_elem:
-                title_link = title_elem.find('a', class_='project-title')
-                if title_link:
-                    titel = title_link.get_text(strip=True)
-                    link = f"https://www.freelancermap.de{title_link['href']}"
-                    
-                    # Detailseite aufrufen
-                    detail_page = self.session.get(link, headers=self.headers)
-                    if detail_page.status_code == 200:
-                        detail_soup = BeautifulSoup(detail_page.text, 'html.parser')
-                        desc_elem = detail_soup.find('div', {'data-translatable': 'description'})
-                        if desc_elem:
-                            description = desc_elem.get_text(strip=True)
-                        else:
-                            description = "N/A"
-                        time.sleep(random.uniform(1, 2))
-                    else:
-                        description = "N/A"
-                else:
-                    titel = "N/A"
-                    link = "N/A"
-                    description = "N/A"
-            else:
-                titel = "N/A"
-                link = "N/A" 
-                description = "N/A"
 
-            # Rest des Codes bleibt gleich...
-            company_elem = project.find('a', class_='company')
-            company = company_elem.get_text(strip=True) if company_elem else "N/A"
-            
-            keywords = []
-            keywords_container = project.find('div', class_='keywords-container')
-            if keywords_container:
-                for keyword in keywords_container.find_all('span', class_='keyword'):
-                    if 'tip_activator' not in keyword.get('class', []):
-                        keywords.append(keyword.get_text(strip=True))
-                
-                tooltip = keywords_container.find('span', class_='tip_activator')
-                if tooltip and 'data-tooltip-title' in tooltip.attrs:
-                    tooltip_keywords = tooltip['data-tooltip-title'].split('\n')
-                    keywords.extend([k.strip() for k in tooltip_keywords if k.strip()])
-            
-            date_elem = project.find('span', class_='created-date')
-            if date_elem:
-                date_text = date_elem.get_text(strip=True).replace('eingetragen am:', '').strip()
-                try:
-                    date_parts = date_text.split('/')
-                    date_str = date_parts[0].strip()
-                    time_str = date_parts[1].strip()
-                    
-                    day, month, year = date_str.split('.')
-                    hour, minute = time_str.split(':')
-                    
-                    created_date = f"{year}-{month.zfill(2)}-{day.zfill(2)} {hour.zfill(2)}:{minute.zfill(2)}:00"
-                except:
-                    created_date = date_text
+        try:
+            ajax_headers = self.headers.copy()
+            ajax_headers.update({
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'X-Requested-With': 'XMLHttpRequest',
+            })
+            response = self.session.get(url, headers=ajax_headers)
+            print(f"Status Code: {response.status_code}")
+
+            if response.status_code != 200:
+                print(f"Fehler: Status Code {response.status_code}")
+                return []
+
+            data = response.json()
+
+            # Login abgelaufen
+            if isinstance(data, dict) and data.get('redirect'):
+                print("Login-Session abgelaufen, versuche erneuten Login...")
+                if self.login():
+                    return self.get_page(page_number)
+                return []
+
+            projects = data if isinstance(data, list) else data.get('projects', data.get('hits', []))
+
+            if not projects:
+                print("Keine Projekte auf dieser Seite gefunden.")
+                return []
+
+            print(f"Gefundene Projekte: {len(projects)}")
+            project_data = []
+            for project in projects:
+                parsed = self._parse_project_json(project)
+                if parsed:
+                    project_data.append(parsed)
+                    print(f"Extrahiert: {parsed.get('titel', '')[:60]}...")
+
+            return project_data
+
+        except Exception as e:
+            import traceback
+            print(f"Fehler beim Laden der Seite {page_number}: {str(e)}")
+            print(traceback.format_exc())
+            return []
+
+    def _parse_project_json(self, project):
+        try:
+            title = project.get('title', 'N/A')
+            company = project.get('company', 'N/A')
+
+            project_path = project.get('links', {}).get('project', '')
+            link = f"{self.base_url}{project_path}" if project_path else 'N/A'
+
+            desc_html = project.get('description', '')
+            if desc_html:
+                desc_soup = BeautifulSoup(desc_html, 'html.parser')
+                description = desc_soup.get_text(separator=' ', strip=True)
             else:
-                created_date = "N/A"
-            
-            is_top = bool(project.find('div', class_='top-project-badge'))
-            is_endkunde = bool(project.find('div', class_='endcustomer-badge'))
-            
-            data = {
-                'titel': titel,
+                description = 'N/A'
+
+            # API liefert keine Keywords — wir extrahieren sie aus der Beschreibung
+            keywords = 'N/A'
+
+            created_raw = project.get('created', '')
+            try:
+                created_dt = datetime.fromisoformat(created_raw)
+                created_date = created_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                created_date = created_raw or 'N/A'
+
+            is_top = project.get('topProject') is not None
+            is_endcustomer = bool(project.get('endcustomer', False))
+
+            return {
+                'titel': title,
                 'link': link,
                 'firma': company,
                 'beschreibung': description,
-                'keywords': ', '.join(keywords) if keywords else "N/A",
+                'keywords': keywords,
                 'eintragungsdatum': created_date,
                 'ist_top_projekt': is_top,
-                'ist_endkundenprojekt': is_endkunde
+                'ist_endkundenprojekt': is_endcustomer,
             }
-            
-            return data
-            
         except Exception as e:
-            print(f"Fehler beim Extrahieren der Projektdaten: {str(e)}")
+            print(f"Fehler beim Parsen eines Projekts: {str(e)}")
             return None
     
     def scrape(self):
@@ -378,13 +328,14 @@ class ProjectMatcher:
         self.db = db
         
     def find_matches(self, profile, min_score=30):
-        projects = pd.read_sql_query("""
-            SELECT * FROM projects 
+        cur = self.db.conn.execute("""
+            SELECT * FROM projects
             WHERE created_date >= date('now', '-30 days')
-        """, self.db.conn)
-        
+        """)
+        projects = cur.fetchall()
+
         matches = []
-        for _, row in projects.iterrows():
+        for row in projects:
             score, debug = self.calculate_match_score(row, profile)
             if score >= min_score:
                 matches.append({
@@ -480,9 +431,13 @@ class ProjectMatcher:
             debug_info.append(f"Preferred in Description: {matching_preferred}")
 
         # Aktualität (20 Punkte) - exponentieller Verfall
-        created = datetime.strptime(row['created_date'], '%Y-%m-%d %H:%M:%S')
-        days_old = (datetime.now() - created).days
-        time_score = 20 * math.exp(-days_old/15)  # Exponentieller Verfall über 15 Tage
+        try:
+            created = datetime.strptime(row['created_date'], '%Y-%m-%d %H:%M:%S')
+            days_old = (datetime.now() - created).days
+            time_score = 20 * math.exp(-days_old/15)
+        except (ValueError, TypeError):
+            time_score = 0
+            days_old = -1
         score += time_score
         debug_info.append(f"Time Score: {time_score:.2f}")
         debug_info.append(f"Days Old: {days_old}")
@@ -490,8 +445,8 @@ class ProjectMatcher:
         return score, "\n".join(debug_info)
 
     def get_statistics(self):
-        stats = pd.read_sql_query("""
-            SELECT 
+        cur = self.db.conn.execute("""
+            SELECT
                 AVG(match_score) as avg_score,
                 COUNT(*) as total_matches,
                 MAX(m.match_date) as latest_match,
@@ -500,16 +455,16 @@ class ProjectMatcher:
             FROM matches m
             JOIN projects p ON m.project_id = p.id
             WHERE m.match_date >= date('now', '-7 days')
-        """, self.db.conn)
-        
-        return stats.to_dict('records')[0]
+        """)
+        return dict(cur.fetchone())
 
     def export_matches(self, min_score=30, export_path=None):
+        import csv
         if export_path is None:
             export_path = f"matches_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            
-        matches_df = pd.read_sql_query("""
-            SELECT 
+
+        cur = self.db.conn.execute("""
+            SELECT
                 p.title, p.company, p.keywords, p.description,
                 p.created_date, p.link, p.is_top_project,
                 p.is_endcustomer, m.match_score, m.match_debug
@@ -517,9 +472,14 @@ class ProjectMatcher:
             JOIN projects p ON m.project_id = p.id
             WHERE m.match_score >= ?
             ORDER BY m.match_score DESC
-        """, self.db.conn, params=[min_score])
-        
-        matches_df.to_csv(export_path, index=False, sep=';')
+        """, (min_score,))
+        rows = cur.fetchall()
+
+        with open(export_path, 'w', newline='', encoding='utf-8-sig') as fh:
+            w = csv.writer(fh, delimiter=';')
+            w.writerow([d[0] for d in cur.description])
+            w.writerows(rows)
+
         return export_path
 
 
@@ -538,6 +498,6 @@ if __name__ == "__main__":
     stats = matcher.get_statistics()
     
     print(f"Matches: {stats['total_matches']}")
-    print(f"Durchschnitt Score: {stats['avg_score']:.2f}")
+    print(f"Durchschnitt Score: {(stats['avg_score'] or 0):.2f}")
     
     matcher.export_matches(min_score=MIN_SCORE)

@@ -1,142 +1,125 @@
-# Freelancermap Project Scraper & Matcher
+# Freelancermap Match Crawler `v2.0.0`
 
-This Python script scrapes projects from freelancermap.de and matches them against your skill profile. It stores the data in a SQLite database and exports matches as CSV.
+Scrapt Projekte von [freelancermap.de](https://www.freelancermap.de), matched sie gegen dein Skill-Profil und zeigt die Ergebnisse in einem Web-Interface an.
+
+## Screenshots
+
+![Matches](docs/screenshot-matches.png)
+![Statistiken](docs/screenshot-statistics.png)
+
+---
 
 ## Features
 
-- Scrapes project listings from freelancermap.de 
-- Stores complete project data in SQLite database
-- Matches projects against customizable skill profile
-- Scoring based on:
-  - Exact keyword matches (30 points)
-  - Partial keyword matches (20 points) 
-  - Description matches (30 points)
-  - Project age (20 points)
-- Exports matches as CSV with detailed debug information
-- 100% remote projects only (German speaking region)
+- Scraping der Projektbörse via AJAX-API
+- Matching gegen ein konfigurierbares Skill-Profil mit Score (0–100)
+- SQLite-Datenbank zur Speicherung aller Projekte und Matches
+- Web-Interface (Flask) mit Matches, Detailansicht und Statistiken
+- Desktop-UI (tkinter) zum Starten des Scrapers ohne Terminal
+- CSV-Export der Matches
+
+## Scoring
+
+| Kategorie | Max. Punkte |
+|---|---|
+| Keyword-Matches (exakt) | 30 |
+| Keyword-Matches (partiell) | 20 |
+| Skills in Beschreibung | 20 |
+| Bevorzugte Keywords in Beschreibung | 10 |
+| Aktualität (exponentieller Verfall, 15 Tage) | 20 |
+
+Projekte mit ausgeschlossenen Keywords erhalten automatisch Score 0.
+
+---
 
 ## Installation
 
-1. Clone this repository
-2. Install requirements:
+### Voraussetzungen
+
+- Python 3.10+
+- Homebrew (macOS) für tkinter: `brew install python-tk@3.XX`
+
+### Setup
+
 ```bash
+# Repository klonen
+git clone ...
+cd freelancermap
+
+# Virtuelle Umgebung erstellen & aktivieren
+python3 -m venv venv
+source venv/bin/activate
+
+# Abhängigkeiten installieren
 pip install -r requirements.txt
 ```
 
-3. Create `.env` file with your freelancermap.de credentials:
+### Zugangsdaten
+
+`.env` Datei im Projektordner anlegen:
+
 ```env
-FREELANCERMAP_USERNAME=your@email.com
-FREELANCERMAP_PASSWORD=your_password
+FREELANCERMAP_USERNAME=deine@email.de
+FREELANCERMAP_PASSWORD=deinPasswort
 ```
 
-## Usage
+---
 
-1. Customize your profile in `main.py`:
+## Verwendung
+
+### Scraper (Terminal)
+
+```bash
+python3 projectMatcher.py
+```
+
+Zugangsdaten und Einstellungen können direkt im Tab **Konfiguration** eingetragen werden.
+
+### Web-Interface
+
+```bash
+python3 webserver.py
+# → http://localhost:5000
+```
+
+### Datenbank-Browser
+
+```bash
+python3 -m sqlite_web freelancermap.db
+# → http://localhost:8080
+```
+
+---
+
+## Konfiguration
+
+Das Skill-Profil wird in `projectMatcher.py` oder über die Desktop-UI gepflegt:
+
 ```python
 profile = {
-    'skills': ['Python', 'JavaScript', 'React', ...],
-    'preferred_keywords': ['Backend', 'Frontend', ...],
-    'excluded_keywords': ['SAP', 'Drupal']
+    'skills': ['Python', 'JavaScript', 'React', 'Vue', 'AWS', ...],
+    'preferred_keywords': ['Backend', 'Frontend', 'Fullstack', ...],
+    'excluded_keywords': ['SAP', 'Drupal'],
 }
 ```
 
-2. Run the script:
-```bash
-python projectMatcher.py
+---
+
+## Projektstruktur
+
+```
+freelancermap/
+├── projectMatcher.py   # Scraper + Matching-Logik
+├── webserver.py        # Flask Web-Interface
+├── ui.py               # tkinter Desktop-UI
+├── templates/          # HTML-Templates (Tailwind)
+├── docs/               # Screenshots
+├── requirements.txt
+└── .env                # Zugangsdaten (nicht im Git)
 ```
 
-## Database Inspection
+---
 
-For a quick web interface to inspect the SQLite database, use `sqlite-web`:
-
-```bash
-# Install sqlite-web
-pip install sqlite-web
-
-# Start the web interface
-sqlite_web freelancermap.db
-
-# Or with specific host/port
-sqlite_web -H 0.0.0.0 -p 8080 freelancermap.db
-```
-
-
-
-3. Check the generated CSV file with matches
-
-## Match Scoring
-
-Projects are scored on a 100 point scale:
-- Keywords (50 points):
-  - Exact matches: 30 points max
-  - Partial matches: 20 points max
-- Description matches (30 points):
-  - Skills found: 20 points max
-  - Preferred keywords: 10 points max
-- Project age (20 points):
-  - Exponential decay over 15 days
-
-## Database Schema
-
-### Projects Table
-- id (PRIMARY KEY)
-- title
-- link (UNIQUE)
-- company 
-- description
-- keywords
-- created_date
-- is_top_project
-- is_endcustomer
-- scrape_date
-
-### Matches Table
-- id (PRIMARY KEY)
-- project_id (FOREIGN KEY)
-- title
-- link
-- company
-- description
-- keywords
-- created_date
-- is_top_project
-- is_endcustomer
-- match_score
-- match_debug
-- match_date
-
-
-# Freelancermap Projekt-Matcher
-
-## Setup
-
-1. Install requirements:
-```bash
-pip install -r requirements.txt
-```
-
-2. Ensure `freelancermap.db` is in the same directory
-
-3. Run the Flask application:
-```bash
-python webserver.py
-```
-
-The application will be available at `http://localhost:5000`
-
-
-## Requirements
-
-- Python 3.8+
-- See requirements.txt for Python packages
-
-## License
+## Lizenz
 
 MIT
-
-## Contributing
-
-Pull requests are welcome!
-```
-
-Would you like me to add anything specific to the README?
