@@ -3,6 +3,7 @@ bin/
 lib/
 include/
 pyvenv.cfg
+.claude
 
 # Credentials & Config
 .env
